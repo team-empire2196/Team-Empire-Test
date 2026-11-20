@@ -100,8 +100,8 @@
     let bytes = new Uint8Array(await file.arrayBuffer());
     if (!(bytes[0] === 0x50 && bytes[1] === 0x4b)) bytes = await decrypt(bytes, password, log);
     log("Reading workbook…"); const wb = await openBook(bytes), names = Object.keys(wb.sheets);
-    const qn = ["CE & NCE & RTC Raw", "Quality Raw"].find(n => names.includes(n)), need = ["KPI", "Day Wise CFS Tracker", "Day Wise AHT Tracker", "Quality & DKB & Quiz Report", "Escalation Accuracy & FCR", "Schedule Attendance Raw", "dkb attedance raw"];
-    const miss = need.filter(n => !names.includes(n)).concat(qn ? [] : ["CE & NCE & RTC Raw"]); if (miss.length) throw Error("Sheets missing in this Excel: " + miss.join(", "));
+    const dkn = ["DKB Attendance Raw", "dkb attedance raw"].find(n => names.includes(n)), qn = ["CE & NCE & RTC Raw", "Quality Raw"].find(n => names.includes(n)), need = ["KPI", "Day Wise CFS Tracker", "Day Wise AHT Tracker", "Quality & DKB & Quiz Report", "Escalation Accuracy & FCR", "Schedule Attendance Raw"];
+    const miss = need.filter(n => !names.includes(n)).concat(qn ? [] : ["CE & NCE & RTC Raw"]).concat(dkn ? [] : ["DKB Attendance Raw"]); if (miss.length) throw Error("Sheets missing in this Excel: " + miss.join(", "));
     // KPI
     const kr = await wb.read("KPI", 55, 60), hi = kr.findIndex(r => r[0] === "ID" && r[1] === "Name" && r[2] === "TL");
     const SLAB = { ce: 11, empathy: 14, fcr: 17, escalation: 20, adherence: 26, login: 29, aht: 34, csat: 37, dkb: 42, quiz: 44, service: 23, break: 40 };
@@ -132,7 +132,7 @@
     });
     att.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)).forEach(([ds, e, o]) => bundle(ds.slice(0, 7), e).att.push(o));
     // DKB
-    const dr = await wb.read("dkb attedance raw", 12), dc = colMap(dr[0]), dk = []; let dkMax = "";
+    const dr = await wb.read(dkn, 12), dc = colMap(dr[0]), dk = []; let dkMax = "";
     dr.slice(1).forEach(r => { const e = eid(g(r, dc["ID"])), p = parts(g(r, dc["Date"])); if (!EIDS.has(e) || !p) return; const ds = dstr(p); if (ds > dkMax) dkMax = ds; dk.push([ds, e, { date: ds, status: String(g(r, dc["Status"])), lob: txt(g(r, dc["LOB"])), tl: txt(g(r, dc["TL"])), role: txt(g(r, dc["Role"])), category: txt(g(r, dc["Category"])) }]); });
     dk.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)).forEach(([ds, e, o]) => bundle(ds.slice(0, 7), e).dkb.push(o));
     // CFS / AHT day-wise
@@ -157,6 +157,18 @@
       });
     }
     // audit summary
+    const geo = t => t.replace(/"?lat"?\s*:\s*-?[\d.]+\s*,\s*"?long"?\s*:\s*-?[\d.]+/g, "location removed");
+    const stamp = v => { const p = parts(v); return p ? dstr(p) + " " + tstr(p) : null; }, secf = v => (typeof v === "number" ? Math.round(v * 86400 * 100) / 100 : 0);
+    const escI = {}, escSummary = {}, punch = {}, salary = {};
+    if (names.includes("Escalation Accuracy Raw")) { log("Escalation accuracy…"); const er = await wb.read("Escalation Accuracy Raw", 20), ex = colMap(er[0]);
+      er.slice(1).forEach(r => { const e = vmap[txt(g(r, ex["TicketCreatedBy"])).toLowerCase()], p = parts(g(r, ex["TicketCreatedDate"])); if (!e || !p) return; const m = dstr(p).slice(0, 7), c = (escSummary[m] || (escSummary[m] = {}))[e] || (escSummary[m][e] = { valid: 0, invalid: 0 }), acc = txt(g(r, ex["EscalationAccuracy"]));
+        if (acc === "Valid") c.valid++; else if (acc === "Invalid") { c.invalid++; (escI[e] || (escI[e] = [])).push({ ticket: txt(g(r, ex["TicketId"])), msisdn: mask(g(r, ex["MSISDN"])), category: txt(g(r, ex["Category"])), sub: txt(g(r, ex["SubCategory"])), created: dstr(p) + " " + tstr(p), by: txt(g(r, ex["TicketCreatedBy"])), accuracy: acc, comment: clean(geo(txt(g(r, ex["FrontLineComments"]))), 1500) }); } }); }
+    if (names.includes("Punch Data")) { log("Punch data…"); const pr = await wb.read("Punch Data", 25), px = colMap(pr[0]);
+      pr.slice(1).forEach(r => { const e = eid(g(r, px["Gnx ID"])), p = parts(g(r, px["Date"])); if (!EIDS.has(e) || !p) return; (punch[e] || (punch[e] = [])).push({ date: dstr(p), shift: txt(g(r, px["Final Roster"])), first: stamp(g(r, px["First Punch Date & Time"])), last: stamp(g(r, px["Last Punch Date & Time"])), durSec: secs(g(r, px["Login Duration"])),
+        punches: Math.trunc(num(g(r, px["Punch Count"])) || 0), rosterCount: Math.trunc(num(g(r, px["Roster Count"])) || 0), present: Math.trunc(num(g(r, px["Present Count"])) || 0), absent: Math.trunc(num(g(r, px["Absent Count"])) || 0), ontime: Math.trunc(num(g(r, px["Ontime Arrival"])) || 0), status: txt(g(r, px["Status"])), remarks: txt(g(r, px["Remarks"])) }); }); }
+    if (names.includes("Salary Data")) { log("Salary data…"); const sl = await wb.read("Salary Data", 10), lx = colMap(sl[1]);
+      sl.slice(2).forEach(r => { const e = eid(g(r, lx["ID"])), p = parts(g(r, lx["Date"])); if (!EIDS.has(e) || !p) return; (salary[e] || (salary[e] = [])).push({ date: dstr(p), skill: txt(g(r, lx["Skill"])), roster: txt(g(r, lx["Roster"])), paySec: secf(g(r, lx["Payroll Updated"])), breakSec: secf(g(r, lx["Break"])), totalSec: secf(g(r, lx["Total"])) }); });
+      Object.values(salary).forEach(a => a.sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0))); }
     const qs = await wb.read("Quality & DKB & Quiz Report", 6), qsum = {}, byName = {}; qs.slice(3).forEach(r => { if (r[0] != null) byName[String(r[0]).trim().toLowerCase()] = r; });
     Object.entries(agents).forEach(([e, a]) => { const r = byName[a.name.trim().toLowerCase()]; if (r) qsum[e] = { audit: Math.trunc(num(r[1]) || 0), pass: Math.trunc(num(r[2]) || 0), fail: Math.trunc(num(r[3]) || 0), ce: num(r[4]), emp: num(r[5]) }; });
     // assemble
@@ -164,7 +176,7 @@
     const months = Object.keys(D).sort(), kpiMonth = months.filter(m => Object.values(D[m]).some(b => b.cfs.length)).pop() || months[months.length - 1], now = new Date();
     const out = { generated: now.getFullYear() + "-" + pad(now.getMonth() + 1) + "-" + pad(now.getDate()) + " " + pad(now.getHours()) + ":" + pad(now.getMinutes()), months, agents: agentList, kpi, kpiMonth, fcr,
       cfsMonthly: Object.fromEntries(Object.entries(cfs).filter(([e]) => EIDS.has(e)).map(([e, v]) => [e, { csat: num(v.monthly[0]), dsat: num(v.monthly[1]), score: pct(v.monthly[2]) }])),
-      ahtMonthly: Object.fromEntries(Object.entries(aht).filter(([e]) => EIDS.has(e)).map(([e, v]) => [e, { staffSec: secs(v.monthly[0]), auxSec: secs(v.monthly[1]), aht: num(v.monthly[2]) }])), qsum, coverage: { attendanceThrough: attMax, dkbThrough: dkMax }, data: D };
+      ahtMonthly: Object.fromEntries(Object.entries(aht).filter(([e]) => EIDS.has(e)).map(([e, v]) => [e, { staffSec: secs(v.monthly[0]), auxSec: secs(v.monthly[1]), aht: num(v.monthly[2]) }])), qsum, esc: escI, escSummary, punch, salary, salaryConfig: { basePerHour: 57, bonusPerHour: { "A+": 10, A: 10, B: 8, C: 5, D: 0 }, breakPercent: 11.5 }, coverage: { attendanceThrough: attMax, dkbThrough: dkMax }, data: D };
     // self-checks (same as the Python report)
     let bad = 0; Object.keys(agents).forEach(e => { const a = ((D[kpiMonth] || {})[e] || { att: [] }).att, ro = a.reduce((t, x) => t + x.rosterCount, 0), ok = a.reduce((t, x) => t + (x.rosterCount ? x.state || 0 : 0), 0), kv = kpi[e].metrics.adherence.value; if (ro && kv != null && Math.abs(ok / ro - kv) > 0.001) bad++; });
     let ceBad = 0; Object.keys(qsum).forEach(e => { const k = kpi[e].metrics.ce.value, q = qsum[e]; if (k != null && q.audit && Math.abs(q.fail / q.audit - k) > 0.001) ceBad++; });
