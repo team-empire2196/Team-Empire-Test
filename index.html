@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Team Empire Performance</title><meta name="robots" content="noindex,nofollow">
+<title>Team Empire Performance</title>
+<link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#12284c"><link rel="apple-touch-icon" href="icon-192.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="robots" content="noindex,nofollow">
 <style>
 :root{--bg:#e8f1fc;--bg2:#dbe8fb;--card:#fff;--ink:#12284c;--mut:#64748b;--line:#e2e8f0;--blue:#2563eb;--cyan:#06b6d4;--vio:#7c3aed;--grn:#10b981;--amb:#f59e0b;--pnk:#ec4899;--org:#f97316;--gold:#c9a24b;--shadow:0 6px 24px rgba(37,99,235,.10);--r:18px}
 [data-t=dark]{--bg:#0b1426;--bg2:#101c34;--card:#14213b;--ink:#e6edf8;--mut:#93a4c0;--line:#243556;--shadow:0 6px 24px rgba(0,0,0,.35)}
@@ -144,6 +145,7 @@ body[data-bg=hex]{background:radial-gradient(ellipse at 30% 10%,#13294f 0,#070d1
 <nav id="bn"><button data-nv="ov"><i>🏠</i>Home</button><button data-nv="me"><i>👤</i>My Perf</button><button data-nv="punch"><i>🕒</i>Punch</button><button data-nv="salary"><i>💰</i>Salary</button></nav>
 </div>
 <script src="fx.js"></script>
+<script>if("serviceWorker"in navigator)addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}))</script>
 <script>
 const $=s=>document.querySelector(s);let S,st={m:null,a:null,v:'ov',all:false};
 const fmtT=s=>s==null?'—':(s=Math.round(s),s<0?'-':'')+[Math.floor(Math.abs(s)/3600),Math.floor(Math.abs(s)%3600/60),Math.abs(s)%60].map((x,i)=>i?String(x).padStart(2,'0'):x).join(':');
