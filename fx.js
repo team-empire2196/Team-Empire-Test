@@ -96,18 +96,22 @@
   // ---- login ----
   const sha = async s => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))].map(b => b.toString(16).padStart(2, '0')).join('');
   const OK = '081b00c4d35380204a23901b624035eb9e3d949b6917427a9fae57760ecc9e05';
-  function login(onOk) {
+  const AGENT_PW = '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4';
+  const isAdmin = async (u, p) => (await sha(u + ':' + p)) === OK, isAgentPw = async p => (await sha(p)) === AGENT_PW;
+  function login(check, onOk) {
     bg('space'); const L = $('#login'); L.hidden = false;
-    $('#lgf').onsubmit = async e => { e.preventDefault(); const u = $('#lgu').value.trim().toLowerCase(), p = $('#lgp').value; if (await sha(u + ':' + p) === OK) { sessionStorage.setItem('te-auth', '1'); L.classList.add('out'); setTimeout(() => { L.hidden = true; L.classList.remove('out'); onOk() }, 450) } else { const c = $('#lgc'); $('#lge').textContent = 'Wrong User ID or Password'; c.classList.remove('shake'); void c.offsetWidth; c.classList.add('shake'); $('#lgp').value = '' } };
+    $('#lgf').onsubmit = async e => { e.preventDefault(); const u = $('#lgu').value.trim().toLowerCase(), p = $('#lgp').value; let role = null; $('#lge').textContent = ''; try { role = await check(u, p) } catch (_) { }
+      if (role) { sessionStorage.setItem('te-auth', role); L.classList.add('out'); setTimeout(() => { L.hidden = true; L.classList.remove('out'); onOk(role) }, 450) }
+      else { const c = $('#lgc'); $('#lge').textContent = 'Wrong User ID or Password'; c.classList.remove('shake'); void c.offsetWidth; c.classList.add('shake'); $('#lgp').value = '' } };
     $('#lgs').onclick = () => { const i = $('#lgp'); i.type = i.type === 'password' ? 'text' : 'password' };
   }
 
   // ---- welcome: hyperspace jump -> logo -> greeting -> motivation ----
   const QUOTES = [['Every call is a chance to build trust.', 'প্রতিটি কলই বিশ্বাস গড়ার সুযোগ।'], ['Small wins every day build a great Empire.', 'প্রতিদিনের ছোট জয়ই গড়ে তোলে মহান সাম্রাজ্য।'], ['Quality is not an act, it is a habit.', 'গুণমান কোনো কাজ নয়, এটা একটা অভ্যাস।'], ['Great teams rise together. Lead with a smile.', 'সেরা টিম একসাথে ওঠে। হাসি দিয়ে নেতৃত্ব দাও।'], ['Your best score is still ahead of you.', 'তোমার সেরা স্কোরটি এখনও সামনে অপেক্ষা করছে।'], ['Rise. Serve. Conquer.', 'জাগো। সেবা দাও। জয় করো।']];
-  function welcome(stats, done) {
-    const w = $('#wel'), c = $('#wcv'), x = c.getContext('2d'); w.hidden = false; w.classList.remove('out'); c.width = innerWidth; c.height = innerHeight; const cx = c.width / 2, cy = c.height / 2, N = small() ? 160 : 280, st = Array.from({ length: N }, () => ({ a: rnd(0, TAU), r: rnd(2, Math.hypot(cx, cy)), z: rnd(.3, 1) })); let t0 = performance.now(), run = true, fin = false;
+  function welcome(stats, done, who) {
+    const w = $('#wel'), c = $('#wcv'), x = c.getContext('2d'); w.hidden = false; w.classList.remove('out'); w.classList.toggle('agent', !!who); { const ph = $('#wphoto'); ph.hidden = !who; if (who) { const im = $('#wpimg'), ini = $('#wpini'); ini.textContent = who.name[0] || '?'; if (who.photo) { im.src = who.photo; im.style.display = 'block'; ini.style.display = 'none' } else { im.style.display = 'none'; ini.style.display = 'grid' } } } c.width = innerWidth; c.height = innerHeight; const cx = c.width / 2, cy = c.height / 2, N = small() ? 160 : 280, st = Array.from({ length: N }, () => ({ a: rnd(0, TAU), r: rnd(2, Math.hypot(cx, cy)), z: rnd(.3, 1) })); let t0 = performance.now(), run = true, fin = false;
     const hr = new Date().getHours(), g = hr < 5 ? ['Good night', 'শুভ রাত্রি'] : hr < 12 ? ['Good morning', 'শুভ সকাল'] : hr < 17 ? ['Good afternoon', 'শুভ অপরাহ্ন'] : hr < 20 ? ['Good evening', 'শুভ সন্ধ্যা'] : ['Good night', 'শুভ রাত্রি'];
-    $('#wg').innerHTML = `${g[0]}, Champions <span>· ${g[1]}</span>`; const head = 'Welcome to Team Empire'; const h1 = $('#wh'); h1.textContent = ''; let i = 0; setTimeout(function ty() { if (!run) return; h1.textContent = head.slice(0, ++i); if (i < head.length) setTimeout(ty, 55) }, 1500);
+    $('#wg').innerHTML = who ? `${g[0]}, ${who.name.split(' ')[0]} <span>· ${g[1]}</span>` : `${g[0]}, Champions <span>· ${g[1]}</span>`; const head = who ? 'Welcome, ' + who.name : 'Welcome to Team Empire'; const h1 = $('#wh'); h1.textContent = ''; let i = 0; setTimeout(function ty() { if (!run) return; h1.textContent = head.slice(0, ++i); if (i < head.length) setTimeout(ty, 55) }, 1500);
     let qi = 0; const q = $('#wq'), showQ = () => { if (!run) return; const [e, b] = QUOTES[qi++ % QUOTES.length]; q.innerHTML = `<b>${e}</b><i>${b}</i>`; q.classList.remove('in'); void q.offsetWidth; q.classList.add('in') }; setTimeout(showQ, 2300); const qt = setInterval(showQ, 2600);
     $('#ws').innerHTML = (stats || []).map(s => `<div><b>${s[0]}</b><span>${s[1]}</span></div>`).join(''); const bar = $('#wp'); bar.style.transition = 'none'; bar.style.width = '0'; void bar.offsetWidth; bar.style.transition = 'width 6.2s cubic-bezier(.3,.7,.2,1)'; bar.style.width = '100%';
     w.classList.remove('go'); void w.offsetWidth; w.classList.add('go');
@@ -116,5 +120,5 @@
     requestAnimationFrame(frame); const end = () => { if (fin) return; fin = true; run = false; clearInterval(qt); w.classList.add('out'); setTimeout(() => { w.hidden = true; done() }, 500) };
     $('#wgo').onclick = end; $('#wsk').onclick = end; setTimeout(end, 8200);
   }
-  window.FX = { bg, go, audit: auditScene, login, welcome, QUOTES };
+  window.FX = { bg, go, audit: auditScene, login, welcome, QUOTES, isAdmin, isAgentPw };
 })();

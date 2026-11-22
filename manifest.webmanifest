@@ -1,1 +1,45 @@
-{"name":"Team Empire Performance","short_name":"Team Empire","description":"Agent performance, punch and salary dashboard","start_url":"./","scope":"./","display":"standalone","orientation":"portrait","background_color":"#04060f","theme_color":"#12284c","icons":[{"src":"icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},{"src":"icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}]}
+{
+ "name": "Team Empire Performance",
+ "short_name": "Team Empire",
+ "description": "Agent performance, punch and salary dashboard",
+ "start_url": "./",
+ "scope": "./",
+ "display": "standalone",
+ "orientation": "portrait",
+ "background_color": "#04060f",
+ "theme_color": "#12284c",
+ "icons": [
+  {
+   "src": "icon-192.png",
+   "sizes": "192x192",
+   "type": "image/png",
+   "purpose": "any maskable"
+  },
+  {
+   "src": "icon-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "any maskable"
+  }
+ ],
+ "id": "./",
+ "lang": "en",
+ "categories": [
+  "business",
+  "productivity"
+ ],
+ "shortcuts": [
+  {
+   "name": "My Performance",
+   "url": "./#v=me"
+  },
+  {
+   "name": "Salary",
+   "url": "./#v=salary"
+  },
+  {
+   "name": "Punch Data",
+   "url": "./#v=punch"
+  }
+ ]
+}
