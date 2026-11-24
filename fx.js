@@ -75,6 +75,17 @@
     draw(t, dt) { ctx.drawImage(S.off, 0, 0, W, H); if (Math.random() < .25) { const c = S.cells[Math.floor(Math.random() * S.cells.length)]; S.pulses.push({ ...c, l: 1, h: Math.random() < .5 ? 190 : 280 }) }
       S.pulses = S.pulses.filter(p => { p.l -= dt * .7; ctx.fillStyle = `hsla(${p.h},90%,65%,${p.l * .32})`; ctx.beginPath(); for (let k = 0; k < 6; k++) { const a = TAU / 6 * k + Math.PI / 6; ctx.lineTo(p.x + Math.cos(a) * S.r, p.y + Math.sin(a) * S.r) } ctx.closePath(); ctx.fill(); return p.l > 0 }) } };
 
+  // ---- RIPPLE (callbacks): phone-call ripples and floating handsets ----
+  M.ripple = { init() { S = { r: [], n: 0, ph: Array.from({ length: small() ? 8 : 14 }, () => ({ x: rnd(0, W), y: rnd(0, H), v: rnd(12, 30), p: rnd(0, 6) })) } },
+    draw(t, dt) { if (t > S.n) { S.n = t + 900; S.r.push({ x: rnd(.1, .9) * W, y: rnd(.15, .85) * H, r: 0, h: Math.random() < .5 ? 175 : 300 }) }
+      S.r = S.r.filter(o => { o.r += dt * 140; const a = Math.max(0, 1 - o.r / 260); ctx.strokeStyle = `hsla(${o.h},90%,65%,${a * .55})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(o.x, o.y, o.r, 0, TAU); ctx.stroke(); ctx.beginPath(); ctx.arc(o.x, o.y, o.r * .62, 0, TAU); ctx.stroke(); glow(o.x, o.y, 10, `hsla(${o.h},90%,70%,${a})`, 'rgba(0,0,0,0)'); return a > 0 });
+      ctx.font = '20px sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#9fd8ff'; S.ph.forEach(p => { p.y -= p.v * dt; if (p.y < -20) { p.y = H + 20; p.x = rnd(0, W) } ctx.globalAlpha = .22 + .2 * Math.sin(t / 600 + p.p); ctx.fillText('☎', p.x + Math.sin(t / 900 + p.p) * 8, p.y) }); ctx.globalAlpha = 1 } };
+  // ---- SCAN (observation): document lines, a scanning light and drifting magnifiers ----
+  M.scan = { init() { S = { lens: Array.from({ length: small() ? 5 : 9 }, () => ({ x: rnd(0, W), y: rnd(0, H), r: rnd(14, 34), vx: rnd(-14, 14), vy: rnd(-10, 10) })) } },
+    draw(t, dt) { ctx.strokeStyle = 'rgba(150,190,255,.09)'; ctx.lineWidth = 1; for (let y = 40; y < H; y += 26) { ctx.beginPath(); ctx.moveTo(W * .08, y); ctx.lineTo(W * (.3 + .55 * Math.abs(Math.sin(y * .37))), y); ctx.stroke() }
+      const y = (t / 9) % (H + 120) - 60, g = ctx.createLinearGradient(0, y - 60, 0, y + 60); g.addColorStop(0, 'rgba(120,180,255,0)'); g.addColorStop(.5, 'rgba(120,180,255,.18)'); g.addColorStop(1, 'rgba(120,180,255,0)'); ctx.fillStyle = g; ctx.fillRect(0, y - 60, W, 120);
+      S.lens.forEach(l => { l.x += l.vx * dt; l.y += l.vy * dt; if (l.x < -50) l.x = W + 50; if (l.x > W + 50) l.x = -50; if (l.y < -50) l.y = H + 50; if (l.y > H + 50) l.y = -50; ctx.strokeStyle = 'rgba(170,210,255,.45)'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(l.x, l.y, l.r, 0, TAU); ctx.stroke(); ctx.beginPath(); ctx.moveTo(l.x + l.r * .7, l.y + l.r * .7); ctx.lineTo(l.x + l.r * 1.5, l.y + l.r * 1.5); ctx.stroke(); glow(l.x - l.r * .3, l.y - l.r * .3, l.r * .5, 'rgba(255,255,255,.12)', 'rgba(255,255,255,0)') }) } };
+
   function loop(t) { raf = requestAnimationFrame(loop); const dt = Math.min(.05, (t - last) / 1000 || .016); last = t; ctx.clearRect(0, 0, W, H); M[mode].draw(t, dt) }
   function bg(m) {
     if (m === mode) return; mode = m; document.body.dataset.bg = m; document.body.classList.toggle('dk', m !== 'classic');
