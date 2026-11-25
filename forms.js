@@ -121,16 +121,22 @@
   const nice = d => new Date(d + 'T00:00').toLocaleDateString('en', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
   let roState = null;
   async function roLoad() { const date = dayOff(1); let rows = []; try { rows = await Store.list('ro', { agent: ROLE.eid }) } catch (_) { return roState = { date, shift: null, err: true } } const m = rows.find(r => r.forDate == date); return roState = { date, shift: m ? m.shift : null } }
-  async function promptRoster() { if (!isAgent() || sessionStorage.getItem('te-ro-skip')) return; const s = await roLoad(); if (!s.shift) showRoster() }
-  function showRoster() {
-    let m = $('#rosterM'); if (m) m.remove(); const date = dayOff(1); m = document.createElement('div'); m.id = 'rosterM'; m.className = 'um'; m.style.zIndex = 85;
-    m.innerHTML = `<div class="card umc" style="text-align:center"><div style="font-size:46px">🗓️</div><h3 style="font-size:20px;line-height:1.5;margin:6px 0">তোমার আগামীকাল রোস্টার রিকোয়ারমেন্ট সাবমিট করো</h3><div class="mut" style="font-size:13px">Next day roster requirement · ${nice(date)}</div>
-      <label class="fl" style="text-align:left">Shift / শিফট<select id="roSel" style="width:100%;margin-top:4px;padding:12px;font-size:16px;border-radius:14px"><option value="">— Select shift —</option>${SHIFTS.map(s => `<option${roState && roState.shift == s ? ' selected' : ''}>${s}</option>`).join('')}</select></label>
-      <div class="umb" style="justify-content:center"><button class="btn pri" data-act="rosubmit">Submit</button><button class="btn" data-act="rolater">Later</button></div></div>`; document.body.appendChild(m);
+  const ROPT = SHIFTS.concat(['DayOff']);
+  function roPage() {
+    const head = '<div class="view"><h2>🗓️ আগামীকালের রোস্টার রিকোয়ারমেন্ট</h2>';
+    if (!isAgent()) return head + '<div class="note">This form is for agents. The submitted requirements are in <b>Requests</b> → Roster Requirements.</div></div>';
+    return head + `<div class="mut">তোমার আগামীকাল রোস্টার রিকোয়ারমেন্ট সাবমিট করো<br>Next day roster requirement for <b>${nice(dayOff(1))}</b></div>${status()}<div id="roCur"></div>
+    <div class="card fm"><label class="fl">Shift / শিফট<select id="roSel"><option value="">— Select shift —</option>${ROPT.map(s => `<option>${s}</option>`).join('')}</select></label>
+    <button class="lgb" style="margin-top:14px" data-act="rosubmit">Submit</button></div><h3 style="margin:16px 2px 6px">My recent roster requirements</h3><div id="roMine"><div class="empty">Loading…</div></div></div>`;
+  }
+  async function roInit() {
+    await roLoad(); const s = roState || {}, sel = $('#roSel'), cur = $('#roCur'); if (!sel) return; if (s.shift) sel.value = s.shift;
+    cur.innerHTML = s.err ? '<div class="note">Could not check your earlier submission. You can still submit.</div>' : s.shift ? `<div class="card" style="border-left:5px solid #10b981">✔ Submitted for ${nice(s.date)}: <b>${esc(s.shift)}</b>. You can change it below.</div>` : `<div class="card" style="border-left:5px solid #f59e0b">⚠ তোমার আগামীকালের রোস্টার রিকোয়ারমেন্ট এখনো সাবমিট করা হয়নি</div>`;
+    const box = $('#roMine'); try { const L = (await Store.list('ro', { agent: ROLE.eid })).sort((x, y) => y.forDate.localeCompare(x.forDate)).slice(0, 7); box.innerHTML = L.length ? L.map(x => `<div class="obc"><div class="cbh"><b>${nice(x.forDate)}</b><span class="sk" style="background:#2563eb;margin-left:auto">${esc(x.shift)}</span></div><div class="mut" style="font-size:12px">Submitted ${fdt(x.createdAt)}</div></div>`).join('') : '<div class="empty">No submissions yet.</div>' } catch (e) { box.innerHTML = `<div class="note">✖ ${esc(e.message)}</div>` }
   }
   async function roSubmit() {
     const v = $('#roSel').value; if (!v) return toast('Select a shift', true); const a = ag(ROLE.eid), b = $('[data-act=rosubmit]'); b.disabled = true;
-    try { await Store.add('ro', { forDate: dayOff(1), agentEid: ROLE.eid, agentName: a ? a.name : '', tl: a ? a.tl : '', shift: v }); roState = { date: dayOff(1), shift: v }; const m = $('#rosterM'); if (m) m.remove(); toast('✔ Roster requirement submitted'); roBanner() }
+    try { await Store.add('ro', { forDate: dayOff(1), agentEid: ROLE.eid, agentName: a ? a.name : '', tl: a ? a.tl : '', shift: v }); roState = { date: dayOff(1), shift: v }; toast('✔ Roster requirement submitted'); roInit() }
     catch (e) { toast('✖ ' + e.message, true) } finally { b.disabled = false }
   }
   async function roBanner() {
@@ -205,7 +211,7 @@
   }
 
   // ================= wiring =================
-  function after() { const v = st.v; if (v == 'cb' && !isAgent()) loadCb(); if (v == 'ob') loadOb(); if (v == 'ad' && isAgent()) { adFill(); adMine() } if (v == 'rq' && !isAgent()) loadRq(); if (v == 'me' && isAgent()) roBanner() }
+  function after() { const v = st.v; if (v == 'cb' && !isAgent()) loadCb(); if (v == 'ob') loadOb(); if (v == 'ad' && isAgent()) { adFill(); adMine() } if (v == 'rq' && !isAgent()) loadRq(); if (v == 'me' && isAgent()) roBanner(); if (v == 'ro' && isAgent()) roInit() }
   document.addEventListener('click', async e => {
     const c = e.target.closest('[data-cbt],[data-cbf],[data-obo],[data-act]'); if (!c) return;
     if (c.dataset.cbt) { st.cbt = c.dataset.cbt; document.querySelectorAll('[data-cbt]').forEach(x => x.classList.toggle('on', x == c)); $('#cbsupw').style.display = st.cbt == 'sup' ? '' : 'none'; const d = $('#cbdue'); if (d && !d.value && st.cbt == '24h') d.value = li(Date.now() + 864e5); return }
@@ -223,8 +229,8 @@
   document.addEventListener('change', e => { if (e.target.id == 'cbag') { st.cba = e.target.value; drawCb() } if (e.target.id == 'obag') { st.oba = e.target.value; drawObAdmin() } });
   document.addEventListener('click', async e => { const c = e.target.closest('[data-rqt],[data-act]'); if (!c) return;
     if (c.dataset.rqt) { st.rqt = c.dataset.rqt; document.querySelectorAll('[data-rqt]').forEach(x => x.classList.toggle('on', x == c)); return loadRq() }
-    const a = c.dataset.act; if (a == 'rosubmit') return roSubmit(); if (a == 'roopen') return showRoster(); if (a == 'rolater') { sessionStorage.setItem('te-ro-skip', '1'); const m = $('#rosterM'); if (m) m.remove(); return } if (a == 'adsubmit') return adSubmit(); if (a == 'rqref') return loadRq() });
+    const a = c.dataset.act; if (a == 'rosubmit') return roSubmit(); if (a == 'roopen') return nav('ro'); if (a == 'adsubmit') return adSubmit(); if (a == 'rqref') return loadRq() });
   document.addEventListener('change', e => { const i = e.target.id; if (i == 'adDate') adFill(); if (i == 'adKind') adNeed(); if (i == 'adFrom' || i == 'adTo') adAuto(); if (i == 'rqd') { st.rqd = e.target.value; drawRo() } if (i == 'rqdt') { st.rqdt = e.target.value; drawAdj() } if (i == 'rqsup') { st.rqsup = e.target.value; drawAdj() } if (i == 'rqag') { st.rqag = e.target.value; drawAdj() } });
   document.addEventListener('input', e => { if (e.target.id == 'adDur') delete e.target.dataset.auto; if (e.target.classList.contains('bad')) e.target.classList.remove('bad') });
-  window.Forms = { cbPage, obPage, adPage, rqPage, promptRoster, after, Store };
+  window.Forms = { cbPage, obPage, adPage, rqPage, roPage, after, Store };
 })();
