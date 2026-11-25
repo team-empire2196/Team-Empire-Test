@@ -2,27 +2,27 @@
    and "Agent Observation" (agents write an observation on their own failed items, admin reads).
    Shared storage = Google Apps Script web app (backend/Code.gs). Without it the data stays on this device only. */
 (() => {
-  const CFG = { backendUrl: '' }; fetch('config.json?ts=' + Date.now()).then(r => r.ok ? r.json() : {}).then(j => Object.assign(CFG, j || {})).catch(() => { });
-  const $ = s => document.querySelector(s), LS = { cb: 'te-local-cb', ob: 'te-local-ob' }, be = () => (localStorage.getItem('te-be') || CFG.backendUrl || '').trim(), ak = () => sessionStorage.getItem('te-ak') || '';
+  const CFG = { backendUrl: '' }; fetch('config.json?ts=' + Date.now()).then(r => r.ok ? r.json() : {}).then(j => { Object.assign(CFG, j || {}); try { if (typeof st !== 'undefined' && S && (st.v == 'cb' || st.v == 'ob')) render() } catch (_) { } }).catch(() => { });
+  const $ = s => document.querySelector(s), LS = { cb: 'te-local-cb', ob: 'te-local-ob', ro: 'te-local-ro', adj: 'te-local-adj' }, be = () => (localStorage.getItem('te-be') || CFG.backendUrl || '').trim(), ak = () => sessionStorage.getItem('te-ak') || '';
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7), rd = k => { try { return JSON.parse(localStorage.getItem(LS[k]) || '[]') } catch (_) { return [] } }, wr = (k, v) => localStorage.setItem(LS[k], JSON.stringify(v));
   async function call(body) {
-    const r = await fetch(be(), { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) }); let j;
-    try { j = await r.json() } catch (_) { throw Error('Shared storage did not answer. Check the web app URL and that it is deployed for “Anyone”.') } if (!j.ok) throw Error(j.error || 'Server error'); return j;
+    let r; try { r = await fetch(be(), { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body), cache: 'no-store', credentials: 'omit' }) } catch (_) { throw Error('Cannot reach shared storage. Open the web-app link in a private window: it must show {"ok":true…}. If it asks you to sign in, redeploy the script with “Who has access: Anyone” and use the link that ends with /exec.') } let j;
+    try { j = await r.json() } catch (_) { throw Error('Shared storage did not answer. Check the web app URL and that it is deployed for “Anyone”.') } if (!j.ok) throw Error(/Unknown kind/.test(j.error || '') ? 'The shared storage script is an older version. Paste the new Code.gs and deploy a new version (see README).' : (j.error || 'Server error')); return j;
   }
   const Store = {
     remote: () => !!be(),
-    async add(kind, rec) { rec.id = rec.id || uid(); rec.createdAt = new Date().toISOString(); if (be()) return call({ a: 'add', kind, rec }); const L = rd(kind), i = kind == 'ob' ? L.findIndex(x => x.agentEid == rec.agentEid && x.itemKey == rec.itemKey) : -1; if (i >= 0) { rec.id = L[i].id; L[i] = rec } else L.push(rec); wr(kind, L); return { ok: true, id: rec.id } },
+    async add(kind, rec) { rec.id = rec.id || uid(); rec.createdAt = new Date().toISOString(); if (be()) return call({ a: 'add', kind, rec }); const L = rd(kind), i = kind == 'ob' ? L.findIndex(x => x.agentEid == rec.agentEid && x.itemKey == rec.itemKey) : kind == 'ro' ? L.findIndex(x => x.agentEid == rec.agentEid && x.forDate == rec.forDate) : -1; if (i >= 0) { rec.id = L[i].id; L[i] = rec } else L.push(rec); wr(kind, L); return { ok: true, id: rec.id } },
     async list(kind, o = {}) { if (be()) return (await call({ a: 'list', kind, agent: o.agent || '', key: ak() })).rows; let L = rd(kind); if (o.agent) L = L.filter(x => x.agentEid == o.agent); return L },
     async del(kind, id) { if (be()) return call({ a: 'del', kind, id, key: ak() }); wr(kind, rd(kind).filter(x => x.id != id)); return { ok: true } }
   };
-  const toast = (t, bad) => { let e = $('#toast'); if (!e) { e = document.createElement('div'); e.id = 'toast'; document.body.appendChild(e) } e.textContent = t; e.className = 'on' + (bad ? ' bad' : ''); clearTimeout(toast.t); toast.t = setTimeout(() => e.className = '', 3200) };
+  const toast = (t, bad) => { let e = $('#toast'); if (!e) { e = document.createElement('div'); e.id = 'toast'; document.body.appendChild(e) } e.textContent = t; e.className = 'on' + (bad ? ' bad' : ''); clearTimeout(toast.t); toast.t = setTimeout(() => e.className = '', bad ? 9000 : 3200) };
   const fdt = iso => { if (!iso) return '—'; const d = new Date(iso); return isNaN(d) ? esc(iso) : d.toLocaleString('en', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) };
   const li = ms => { const d = new Date(ms), p = n => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes()) };
   const isAgent = () => ROLE.type == 'agent';
   const status = () => Store.remote() ? '<div class="note" style="border-color:#10b981">✔ Connected to shared storage.</div>' : `<div class="note">${isAgent() ? 'Shared storage is not connected yet: what you submit stays on this device and your supervisor will not see it until the admin connects it.' : 'Shared storage is not connected: submissions from agents’ phones will not reach you. Open “Shared storage setup” below.'}</div>`;
   const setup = () => isAgent() ? '' : `<details class="card" style="margin-top:14px"><summary style="cursor:pointer;font-weight:700">Shared storage setup (admin)</summary><div class="mut" style="font-size:13px;margin:8px 0">Paste the Google Apps Script web app URL (see README, “Shared storage”). To connect every device, also put it in <b>config.json</b> on GitHub. Admin key = the ADMIN_KEY you set in the script; it is kept only for this browser session.</div>
     <label class="fl">Web app URL<input id="beurl" type="text" placeholder="https://script.google.com/macros/s/…/exec" value="${esc(localStorage.getItem('te-be') || '')}"></label><label class="fl">Admin key<input id="akin" type="password" autocomplete="off" placeholder="ADMIN_KEY" value="${esc(ak())}"></label>
-    <div class="umb"><button class="btn pri" data-act="besave">Save</button><button class="btn" data-act="beclear">Disconnect</button></div></details>`;
+    <div class="umb"><button class="btn pri" data-act="besave">Save</button><button class="btn" data-act="betest">Test connection</button><button class="btn" data-act="beclear">Disconnect</button></div></details>`;
   const keyForm = () => `<div class="card"><h3>Admin key needed</h3><div class="mut" style="font-size:13px">Type the ADMIN_KEY you set in the Apps Script (kept only for this browser session).</div><label class="fl"><input id="akin2" type="password" autocomplete="off" placeholder="ADMIN_KEY"></label><div class="umb"><button class="btn pri" data-act="aksave2">Unlock</button></div></div>`;
   const chips = (arr, cur, attr) => `<div class="chips">${arr.map(([k, l]) => `<button class="chip2${k == cur ? ' on' : ''}" ${attr}="${k}">${l}</button>`).join('')}</div>`;
 
@@ -112,8 +112,100 @@
     box.innerHTML = h;
   }
 
+
+  // ================= Next-day roster requirement (shown after an agent logs in) =================
+  const SHIFTS = ['07:00-16:00', '08:00-17:00', '09:00-17:00', '12:00-21:00', '14:00-23:00', '15:00-23:00', '16:00-23:00', '17:00-23:00', '18:00-00:00', 'Night (21:00-07:00)'];
+  const ADJ = ['Only Login Adjustment', 'Only Logout Adjustment', 'Only Lag Adjustment', 'Login Adherence + Lag Adjustment', 'Logout Adjustment + Lag Adjustment'];
+  const SUPS = ['Md Ariful Islam Niloy', 'Mohammad Imam Hossain', 'Nusrat Jahan Tamanna', 'Sattazit Gosh', 'Shajjadul Rhythm', 'Fahad Hridoy', 'Sanjida Islam Tinny'];
+  const ymd = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'), dayOff = n => { const d = new Date(); d.setDate(d.getDate() + n); return ymd(d) };
+  const nice = d => new Date(d + 'T00:00').toLocaleDateString('en', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+  let roState = null;
+  async function roLoad() { const date = dayOff(1); let rows = []; try { rows = await Store.list('ro', { agent: ROLE.eid }) } catch (_) { return roState = { date, shift: null, err: true } } const m = rows.find(r => r.forDate == date); return roState = { date, shift: m ? m.shift : null } }
+  async function promptRoster() { if (!isAgent() || sessionStorage.getItem('te-ro-skip')) return; const s = await roLoad(); if (!s.shift) showRoster() }
+  function showRoster() {
+    let m = $('#rosterM'); if (m) m.remove(); const date = dayOff(1); m = document.createElement('div'); m.id = 'rosterM'; m.className = 'um'; m.style.zIndex = 85;
+    m.innerHTML = `<div class="card umc" style="text-align:center"><div style="font-size:46px">🗓️</div><h3 style="font-size:20px;line-height:1.5;margin:6px 0">তোমার আগামীকাল রোস্টার রিকোয়ারমেন্ট সাবমিট করো</h3><div class="mut" style="font-size:13px">Next day roster requirement · ${nice(date)}</div>
+      <label class="fl" style="text-align:left">Shift / শিফট<select id="roSel" style="width:100%;margin-top:4px;padding:12px;font-size:16px;border-radius:14px"><option value="">— Select shift —</option>${SHIFTS.map(s => `<option${roState && roState.shift == s ? ' selected' : ''}>${s}</option>`).join('')}</select></label>
+      <div class="umb" style="justify-content:center"><button class="btn pri" data-act="rosubmit">Submit</button><button class="btn" data-act="rolater">Later</button></div></div>`; document.body.appendChild(m);
+  }
+  async function roSubmit() {
+    const v = $('#roSel').value; if (!v) return toast('Select a shift', true); const a = ag(ROLE.eid), b = $('[data-act=rosubmit]'); b.disabled = true;
+    try { await Store.add('ro', { forDate: dayOff(1), agentEid: ROLE.eid, agentName: a ? a.name : '', tl: a ? a.tl : '', shift: v }); roState = { date: dayOff(1), shift: v }; const m = $('#rosterM'); if (m) m.remove(); toast('✔ Roster requirement submitted'); roBanner() }
+    catch (e) { toast('✖ ' + e.message, true) } finally { b.disabled = false }
+  }
+  async function roBanner() {
+    const box = $('#rosterBn'); if (!box || !isAgent()) return; if (!roState) await roLoad(); const s = roState || {};
+    box.innerHTML = s.shift ? `<div class="card" style="margin-top:12px;border-left:5px solid #10b981">🗓️ Tomorrow’s roster requirement (${nice(s.date)}): <b>${esc(s.shift)}</b> ✓ <button class="lnk" data-act="roopen" style="margin-left:8px">Change</button></div>`
+      : `<div class="card" style="margin-top:12px;border-left:5px solid #f59e0b">⚠ তোমার আগামীকালের রোস্টার রিকোয়ারমেন্ট এখনো সাবমিট করা হয়নি <button class="btn pri" data-act="roopen" style="margin-left:8px">Submit now</button></div>`;
+  }
+
+  // ================= Lag & Adherence Adjustment form =================
+  const hm = s => { const m = /(\d{1,2}):(\d{2})/.exec(s || ''); return m ? m[1].padStart(2, '0') + ':' + m[2] : '' }, shiftFmt = s => { const m = /^(\d{2})(\d{2})-(\d{2})(\d{2})$/.exec(s || ''); return m ? m[1] + ':' + m[2] + '-' + m[3] + ':' + m[4] : (s || '') };
+  const NEED = { 'Only Login Adjustment': ['adPin', 'adLog'], 'Only Logout Adjustment': ['adPout', 'adLogout'], 'Only Lag Adjustment': [], 'Login Adherence + Lag Adjustment': ['adPin', 'adLog'], 'Logout Adjustment + Lag Adjustment': ['adPout', 'adLogout'] };
+  const NEEDTXT = { adPin: 'Punch In', adLog: 'Login', adPout: 'Punch Out', adLogout: 'Logout' };
+  function adPage() {
+    const head = '<div class="view"><h2>⏱️ Lag & Adherence Adjustment</h2>';
+    if (!isAgent()) return head + '<div class="note">This form is for agents. The submitted forms are in <b>Requests</b>.</div></div>';
+    const a = ag(ROLE.eid), opts = [0, -1, -2].map(n => `<option value="${dayOff(n)}">${n ? 'Today' + n : 'Today'} · ${nice(dayOff(n))}</option>`).join('');
+    return head + `<div class="mut">Fill this form when you need a lag or adherence adjustment. Times are filled from the system where available; correct anything that is wrong.</div>${status()}
+    <div class="card fm"><label class="fl">Date<select id="adDate">${opts}</select></label>
+    <label class="fl">Employee ID<input id="adEid" type="text" readonly value="${ROLE.eid}"></label><label class="fl">Name<input id="adName" type="text" readonly value="${esc(a ? a.name : '')}"></label>
+    <label class="fl">Which shift you did<input id="adShift" type="text" list="adShl" autocomplete="off" placeholder="e.g. 09:00-17:00"><datalist id="adShl">${SHIFTS.map(s => `<option value="${s}">`).join('')}<option value="Dayoff"></datalist></label>
+    <label class="fl">What kind of Adjustment you Needed<select id="adKind"><option value="">— Select —</option>${ADJ.map(k => `<option>${k}</option>`).join('')}</select></label><div id="adNeed" class="mut" style="font-size:12px;margin-top:4px"></div>
+    <div class="adg"><label class="fl">Your Punch In Time<input id="adPin" type="time"></label><label class="fl">Your Login Time<input id="adLog" type="time"></label><label class="fl">Your Punch Out Time<input id="adPout" type="time"></label><label class="fl">Your Logout Time<input id="adLogout" type="time"></label></div>
+    <label class="fl">কতটুকু এডজাস্টমেন্ট লাগবে / How much adjustment needed (minutes)<input id="adDur" type="number" min="1" inputmode="numeric" placeholder="e.g. 25"></label>
+    <div class="fl" style="margin-top:10px">কোন টাইম থেকে কোন টাইম পর্যন্ত এডজাস্টমেন্ট লাগবে / From which time to which time adjustment needed</div><div class="adg"><label class="fl">From time<input id="adFrom" type="time"></label><label class="fl">End time<input id="adTo" type="time"></label></div>
+    <label class="fl">Floor Supervisor Name<select id="adSup"><option value="">— Select —</option>${SUPS.map(s => `<option>${s}</option>`).join('')}</select></label>
+    <button class="lgb" style="margin-top:14px" data-act="adsubmit">Submit adjustment</button></div><h3 style="margin:16px 2px 6px">My recent submissions</h3><div id="adMine"><div class="empty">Loading…</div></div></div>`;
+  }
+  function adFill() {
+    const d = $('#adDate').value, m = d.slice(0, 7), r = B(m, ROLE.eid).att.find(x => x.date == d), p = ((S.punch || {})[ROLE.eid] || []).find(x => x.date == d), set = (id, v) => { const e = $('#' + id); if (e) e.value = v || '' };
+    set('adShift', r ? (r.dayOff ? 'Dayoff' : shiftFmt(r.shift)) : (p ? shiftFmt(p.shift) : '')); set('adLog', hm(r && r.login)); set('adLogout', hm(r && r.logout)); set('adPin', hm(p && p.first && p.first.slice(11))); set('adPout', hm(p && p.last && p.last.slice(11)));
+  }
+  function adNeed() { const k = $('#adKind').value, n = NEED[k] || []; $('#adNeed').textContent = k ? (n.length ? 'Required for this type: ' + n.map(x => NEEDTXT[x]).join(' + ') + ' time' : 'No punch/login times are required for this type.') : ''; ['adPin', 'adLog', 'adPout', 'adLogout'].forEach(i => $('#' + i).parentElement.classList.toggle('reqd', n.includes(i))) }
+  function adAuto() { const f = $('#adFrom').value, t = $('#adTo').value, d = $('#adDur'); if (!f || !t || (d.value && !d.dataset.auto)) return; const [a, b] = [f, t].map(x => { const [h, m] = x.split(':').map(Number); return h * 60 + m }); d.value = ((b - a) + 1440) % 1440 || ''; d.dataset.auto = '1' }
+  async function adSubmit() {
+    const g = id => $('#' + id).value.trim(), kind = g('adKind'), bad = [];
+    ['adShift', 'adKind', 'adDur', 'adFrom', 'adTo', 'adSup'].forEach(i => { if (!g(i)) bad.push(i) }); (NEED[kind] || []).forEach(i => { if (!g(i)) bad.push(i) });
+    document.querySelectorAll('.fm .bad').forEach(e => e.classList.remove('bad')); bad.forEach(i => $('#' + i).classList.add('bad'));
+    if (bad.length) { $('#' + bad[0]).scrollIntoView({ block: 'center', behavior: 'smooth' }); return toast('Fill the highlighted fields', true) }
+    const a = ag(ROLE.eid), b = $('[data-act=adsubmit]'); b.disabled = true;
+    try { await Store.add('adj', { date: g('adDate'), agentEid: ROLE.eid, agentName: a ? a.name : '', tl: a ? a.tl : '', shift: g('adShift'), kind, punchIn: g('adPin'), login: g('adLog'), punchOut: g('adPout'), logout: g('adLogout'), duration: g('adDur'), fromTime: g('adFrom'), toTime: g('adTo'), supervisor: g('adSup') });
+      toast('✔ Adjustment submitted'); ['adKind', 'adDur', 'adFrom', 'adTo', 'adSup'].forEach(i => { $('#' + i).value = ''; delete $('#' + i).dataset.auto }); adNeed(); adMine() }
+    catch (e) { toast('✖ ' + e.message, true) } finally { b.disabled = false }
+  }
+  async function adMine() {
+    const box = $('#adMine'); if (!box) return; try { const L = (await Store.list('adj', { agent: ROLE.eid })).sort((x, y) => (y.createdAt || '').localeCompare(x.createdAt || '')).slice(0, 10);
+      box.innerHTML = L.length ? L.map(x => `<div class="obc"><div class="cbh"><b>${nice(x.date)}</b><span class="sk" style="background:#2563eb;margin-left:auto">${esc(x.kind)}</span></div><div class="mut" style="font-size:13px">${esc(x.fromTime)} → ${esc(x.toTime)} · ${esc(x.duration)} min · ${esc(x.supervisor)}<br>Submitted ${fdt(x.createdAt)}</div></div>`).join('') : '<div class="empty">No submissions yet.</div>' } catch (e) { box.innerHTML = `<div class="note">✖ ${esc(e.message)}</div>` }
+  }
+
+  // ================= Admin: Requests (roster requirements + adjustment forms) =================
+  const RQ = [['ro', 'Roster Requirements'], ['adj', 'Adjustment Forms']];
+  function rqPage() { st.rqt = st.rqt || 'ro'; return '<div class="view"><h2>📋 Requests</h2><div class="mut">Roster requirements and lag / adherence adjustment forms submitted by agents.</div>' + status() + chips(RQ, st.rqt, 'data-rqt') + '<div id="rqbox"><div class="empty">Loading…</div></div>' + setup() + '</div>' }
+  let rqRows = [];
+  async function loadRq() {
+    const box = $('#rqbox'); if (!box) return; if (Store.remote() && !ak()) { box.innerHTML = keyForm(); return }
+    try { rqRows = await Store.list(st.rqt); st.rqt == 'ro' ? drawRo() : drawAdj() } catch (e) { box.innerHTML = `<div class="note">✖ ${esc(e.message)}</div>` }
+  }
+  function drawRo() {
+    const box = $('#rqbox'), dates = [...new Set([dayOff(1), ...rqRows.map(r => r.forDate)])].sort().reverse(); if (!dates.includes(st.rqd)) st.rqd = dayOff(1);
+    const L = rqRows.filter(r => r.forDate == st.rqd), A = S.agents.slice().sort((x, y) => x.name.localeCompare(y.name)), by = {}; L.forEach(r => by[r.shift] = (by[r.shift] || 0) + 1); const miss = A.filter(a => !L.some(r => r.agentEid == a.eid));
+    box.innerHTML = `<div class="bar2"><b>For date</b><select id="rqd">${dates.map(d => `<option value="${d}"${d == st.rqd ? ' selected' : ''}>${nice(d)}${d == dayOff(1) ? ' (tomorrow)' : ''}</option>`).join('')}</select><button class="btn" data-act="rqref">↻ Refresh</button><b>${L.length} of ${A.length} submitted</b></div>
+      <div class="chips">${Object.entries(by).sort().map(([s, n]) => `<span class="chip2 on" style="cursor:default">${esc(s)} · ${n}</span>`).join('') || ''}</div>` +
+      `<div class="card">${tbl([['Agent', r => esc(r.agentName)], ['TL', r => esc(r.tl)], ['Shift required', r => '<b>' + esc(r.shift) + '</b>'], ['Submitted', r => fdt(r.createdAt)]], L.sort((x, y) => x.shift.localeCompare(y.shift)))}</div>` +
+      `<h3 style="margin:14px 2px 6px">Not submitted yet (${miss.length})</h3>` + (miss.length ? `<div class="card">${miss.map(a => `<span class="st r" style="margin:3px">${esc(a.name)}</span>`).join('')}</div>` : '<div class="empty">Everyone has submitted 🎉</div>');
+  }
+  function drawAdj() {
+    const box = $('#rqbox'), dopt = [['', 'All dates'], [dayOff(0), 'Today'], [dayOff(-1), 'Today-1'], [dayOff(-2), 'Today-2']], A = S.agents.slice().sort((x, y) => x.name.localeCompare(y.name));
+    const L = rqRows.filter(r => (!st.rqdt || r.date == st.rqdt) && (!st.rqsup || r.supervisor == st.rqsup) && (!st.rqag || r.agentEid == st.rqag)).sort((x, y) => (y.createdAt || '').localeCompare(x.createdAt || ''));
+    box.innerHTML = `<div class="bar2"><select id="rqdt">${dopt.map(([v, l]) => `<option value="${v}"${v == (st.rqdt || '') ? ' selected' : ''}>${l}</option>`).join('')}</select><select id="rqsup"><option value="">All supervisors</option>${SUPS.map(s => `<option${s == st.rqsup ? ' selected' : ''}>${s}</option>`).join('')}</select><select id="rqag"><option value="">All agents</option>${A.map(a => `<option value="${a.eid}"${a.eid == st.rqag ? ' selected' : ''}>${esc(a.name)}</option>`).join('')}</select><button class="btn" data-act="rqref">↻ Refresh</button><b>${L.length} form(s)</b></div>` +
+      (L.length ? L.map(x => `<div class="obc"><div class="cbh"><b>${esc(x.agentName)}</b><span class="mut">EID ${esc(x.agentEid)}</span><span class="sk" style="background:#2563eb;margin-left:auto">${esc(x.kind)}</span></div>
+        <div><b>${nice(x.date)}</b> · Shift ${esc(x.shift)}</div><div class="adg mut" style="font-size:13px;margin:6px 0"><div>Punch In: <b>${esc(x.punchIn) || '—'}</b></div><div>Login: <b>${esc(x.login) || '—'}</b></div><div>Punch Out: <b>${esc(x.punchOut) || '—'}</b></div><div>Logout: <b>${esc(x.logout) || '—'}</b></div></div>
+        <div>Adjustment: <b>${esc(x.duration)} min</b> (${esc(x.fromTime)} → ${esc(x.toTime)})</div><div class="mut" style="font-size:12px;margin-top:4px">Floor supervisor: <b>${esc(x.supervisor)}</b> · Submitted ${fdt(x.createdAt)}</div></div>`).join('') : '<div class="empty">No adjustment forms for this filter.</div>');
+  }
+
   // ================= wiring =================
-  function after() { const v = st.v; if (v == 'cb' && !isAgent()) loadCb(); if (v == 'ob') loadOb() }
+  function after() { const v = st.v; if (v == 'cb' && !isAgent()) loadCb(); if (v == 'ob') loadOb(); if (v == 'ad' && isAgent()) { adFill(); adMine() } if (v == 'rq' && !isAgent()) loadRq(); if (v == 'me' && isAgent()) roBanner() }
   document.addEventListener('click', async e => {
     const c = e.target.closest('[data-cbt],[data-cbf],[data-obo],[data-act]'); if (!c) return;
     if (c.dataset.cbt) { st.cbt = c.dataset.cbt; document.querySelectorAll('[data-cbt]').forEach(x => x.classList.toggle('on', x == c)); $('#cbsupw').style.display = st.cbt == 'sup' ? '' : 'none'; const d = $('#cbdue'); if (d && !d.value && st.cbt == '24h') d.value = li(Date.now() + 864e5); return }
@@ -123,8 +215,16 @@
     if (a == 'cbdel') { if (!confirm('Mark this callback as done and delete it?')) return; try { await Store.del('cb', c.dataset.id); cbRows = cbRows.filter(x => x.id != c.dataset.id); drawCb(); toast('✔ Deleted') } catch (x) { toast('✖ ' + x.message, true) } return }
     if (a == 'besave') { const u = $('#beurl').value.trim(), k = $('#akin').value; u ? localStorage.setItem('te-be', u) : localStorage.removeItem('te-be'); k ? sessionStorage.setItem('te-ak', k) : sessionStorage.removeItem('te-ak'); toast('Saved'); render(); return }
     if (a == 'beclear') { localStorage.removeItem('te-be'); sessionStorage.removeItem('te-ak'); toast('Disconnected (using this device only)'); render(); return }
+    if (a == 'betest') { const u = ($('#beurl').value.trim() || be()), k = $('#akin').value || ak(); if (!u) return toast('Paste the web app URL first', true);
+      try { const j = await (await fetch(u)).json(); if (!j.ok) throw 0; if (!k) return toast('✔ Storage reached. Type the admin key and test again to check it.'); const jj = await (await fetch(u, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ a: 'list', kind: 'cb', key: k }) })).json(); toast(jj.ok ? '✔ Connected, and the admin key is correct' : '✔ Storage reached, but: ' + jj.error, !jj.ok) }
+      catch (_) { toast('✖ Could not reach it. The URL must end with /exec and “Who has access” must be Anyone.', true) } return }
     if (a == 'aksave2') { const k = $('#akin2').value; if (!k) return; sessionStorage.setItem('te-ak', k); after(); return }
   });
   document.addEventListener('change', e => { if (e.target.id == 'cbag') { st.cba = e.target.value; drawCb() } if (e.target.id == 'obag') { st.oba = e.target.value; drawObAdmin() } });
-  window.Forms = { cbPage, obPage, after, Store };
+  document.addEventListener('click', async e => { const c = e.target.closest('[data-rqt],[data-act]'); if (!c) return;
+    if (c.dataset.rqt) { st.rqt = c.dataset.rqt; document.querySelectorAll('[data-rqt]').forEach(x => x.classList.toggle('on', x == c)); return loadRq() }
+    const a = c.dataset.act; if (a == 'rosubmit') return roSubmit(); if (a == 'roopen') return showRoster(); if (a == 'rolater') { sessionStorage.setItem('te-ro-skip', '1'); const m = $('#rosterM'); if (m) m.remove(); return } if (a == 'adsubmit') return adSubmit(); if (a == 'rqref') return loadRq() });
+  document.addEventListener('change', e => { const i = e.target.id; if (i == 'adDate') adFill(); if (i == 'adKind') adNeed(); if (i == 'adFrom' || i == 'adTo') adAuto(); if (i == 'rqd') { st.rqd = e.target.value; drawRo() } if (i == 'rqdt') { st.rqdt = e.target.value; drawAdj() } if (i == 'rqsup') { st.rqsup = e.target.value; drawAdj() } if (i == 'rqag') { st.rqag = e.target.value; drawAdj() } });
+  document.addEventListener('input', e => { if (e.target.id == 'adDur') delete e.target.dataset.auto; if (e.target.classList.contains('bad')) e.target.classList.remove('bad') });
+  window.Forms = { cbPage, obPage, adPage, rqPage, promptRoster, after, Store };
 })();
