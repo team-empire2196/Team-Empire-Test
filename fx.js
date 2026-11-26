@@ -106,7 +106,7 @@
 
   // ---- login ----
   const sha = async s => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))].map(b => b.toString(16).padStart(2, '0')).join('');
-  const OK = '081b00c4d35380204a23901b624035eb9e3d949b6917427a9fae57760ecc9e05';
+  const OK = 'e0ef1b7754d2fcaa1bf2d9171290a84947f2943d78934fbe06973d4a653f5c95';
   const AGENT_PW = '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4';
   const isAdmin = async (u, p) => (await sha(u + ':' + p)) === OK, isAgentPw = async p => (await sha(p)) === AGENT_PW;
   function login(check, onOk) {

@@ -122,12 +122,10 @@
   let roState = null;
   async function roLoad() { const date = dayOff(1); let rows = []; try { rows = await Store.list('ro', { agent: ROLE.eid }) } catch (_) { return roState = { date, shift: null, err: true } } const m = rows.find(r => r.forDate == date); return roState = { date, shift: m ? m.shift : null } }
   const ROPT = SHIFTS.concat(['DayOff']);
-  function roPage() {
-    const head = '<div class="view"><h2>🗓️ আগামীকালের রোস্টার রিকোয়ারমেন্ট</h2>';
-    if (!isAgent()) return head + '<div class="note">This form is for agents. The submitted requirements are in <b>Requests</b> → Roster Requirements.</div></div>';
-    return head + `<div class="mut">তোমার আগামীকাল রোস্টার রিকোয়ারমেন্ট সাবমিট করো<br>Next day roster requirement for <b>${nice(dayOff(1))}</b></div>${status()}<div id="roCur"></div>
+  function roBody() {
+    return `<h3 style="margin:6px 2px 2px">🗓️ আগামীকালের রোস্টার রিকোয়ারমেন্ট</h3><div class="mut">তোমার আগামীকাল রোস্টার রিকোয়ারমেন্ট সাবমিট করো<br>Next day roster requirement for <b>${nice(dayOff(1))}</b></div>${status()}<div id="roCur"></div>
     <div class="card fm"><label class="fl">Shift / শিফট<select id="roSel"><option value="">— Select shift —</option>${ROPT.map(s => `<option>${s}</option>`).join('')}</select></label>
-    <button class="lgb" style="margin-top:14px" data-act="rosubmit">Submit</button></div><h3 style="margin:16px 2px 6px">My recent roster requirements</h3><div id="roMine"><div class="empty">Loading…</div></div></div>`;
+    <button class="lgb" style="margin-top:14px" data-act="rosubmit">Submit</button></div><h3 style="margin:16px 2px 6px">My recent roster requirements</h3><div id="roMine"><div class="empty">Loading…</div></div>`;
   }
   async function roInit() {
     await roLoad(); const s = roState || {}, sel = $('#roSel'), cur = $('#roCur'); if (!sel) return; if (s.shift) sel.value = s.shift;
@@ -149,9 +147,8 @@
   const hm = s => { const m = /(\d{1,2}):(\d{2})/.exec(s || ''); return m ? m[1].padStart(2, '0') + ':' + m[2] : '' }, shiftFmt = s => { const m = /^(\d{2})(\d{2})-(\d{2})(\d{2})$/.exec(s || ''); return m ? m[1] + ':' + m[2] + '-' + m[3] + ':' + m[4] : (s || '') };
   const NEED = { 'Only Login Adjustment': ['adPin', 'adLog'], 'Only Logout Adjustment': ['adPout', 'adLogout'], 'Only Lag Adjustment': [], 'Login Adherence + Lag Adjustment': ['adPin', 'adLog'], 'Logout Adjustment + Lag Adjustment': ['adPout', 'adLogout'] };
   const NEEDTXT = { adPin: 'Punch In', adLog: 'Login', adPout: 'Punch Out', adLogout: 'Logout' };
-  function adPage() {
-    const head = '<div class="view"><h2>⏱️ Lag & Adherence Adjustment</h2>';
-    if (!isAgent()) return head + '<div class="note">This form is for agents. The submitted forms are in <b>Requests</b>.</div></div>';
+  function adBody() {
+    const head = '<h3 style="margin:6px 2px 2px">⏱️ Lag & Adherence Adjustment</h3>';
     const a = ag(ROLE.eid), opts = [0, -1, -2].map(n => `<option value="${dayOff(n)}">${n ? 'Today' + n : 'Today'} · ${nice(dayOff(n))}</option>`).join('');
     return head + `<div class="mut">Fill this form when you need a lag or adherence adjustment. Times are filled from the system where available; correct anything that is wrong.</div>${status()}
     <div class="card fm"><label class="fl">Date<select id="adDate">${opts}</select></label>
@@ -162,7 +159,7 @@
     <label class="fl">কতটুকু এডজাস্টমেন্ট লাগবে / How much adjustment needed (minutes)<input id="adDur" type="number" min="1" inputmode="numeric" placeholder="e.g. 25"></label>
     <div class="fl" style="margin-top:10px">কোন টাইম থেকে কোন টাইম পর্যন্ত এডজাস্টমেন্ট লাগবে / From which time to which time adjustment needed</div><div class="adg"><label class="fl">From time<input id="adFrom" type="time"></label><label class="fl">End time<input id="adTo" type="time"></label></div>
     <label class="fl">Floor Supervisor Name<select id="adSup"><option value="">— Select —</option>${SUPS.map(s => `<option>${s}</option>`).join('')}</select></label>
-    <button class="lgb" style="margin-top:14px" data-act="adsubmit">Submit adjustment</button></div><h3 style="margin:16px 2px 6px">My recent submissions</h3><div id="adMine"><div class="empty">Loading…</div></div></div>`;
+    <button class="lgb" style="margin-top:14px" data-act="adsubmit">Submit adjustment</button></div><h3 style="margin:16px 2px 6px">My recent submissions</h3><div id="adMine"><div class="empty">Loading…</div></div>`;
   }
   function adFill() {
     const d = $('#adDate').value, m = d.slice(0, 7), r = B(m, ROLE.eid).att.find(x => x.date == d), p = ((S.punch || {})[ROLE.eid] || []).find(x => x.date == d), set = (id, v) => { const e = $('#' + id); if (e) e.value = v || '' };
@@ -184,6 +181,19 @@
     const box = $('#adMine'); if (!box) return; try { const L = (await Store.list('adj', { agent: ROLE.eid })).sort((x, y) => (y.createdAt || '').localeCompare(x.createdAt || '')).slice(0, 10);
       box.innerHTML = L.length ? L.map(x => `<div class="obc"><div class="cbh"><b>${nice(x.date)}</b><span class="sk" style="background:#2563eb;margin-left:auto">${esc(x.kind)}</span></div><div class="mut" style="font-size:13px">${esc(x.fromTime)} → ${esc(x.toTime)} · ${esc(x.duration)} min · ${esc(x.supervisor)}<br>Submitted ${fdt(x.createdAt)}</div></div>`).join('') : '<div class="empty">No submissions yet.</div>' } catch (e) { box.innerHTML = `<div class="note">✖ ${esc(e.message)}</div>` }
   }
+
+
+  // ================= One menu "Requirement": choose Roster requirement or Lag & Adherence Adjustment =================
+  function arBody() { return st.art == 'ad' ? adBody() : st.art == 'ro' ? roBody() : '' }
+  function arPage() {
+    const head = '<div class="view"><h2>🧾 Requirement</h2>';
+    if (!isAgent()) return head + '<div class="note">This menu is for agents. What they submit is in <b>Requests</b>.</div></div>';
+    const t = st.art || '';
+    return head + `<div class="mut">What do you need to submit? Choose an option.</div>${status()}<div class="tiles">
+      <button class="tile${t == 'ro' ? ' on' : ''}" data-art="ro"><i>🗓️</i><b>Next Day Roster Requirement</b><span>আগামীকালের রোস্টার রিকোয়ারমেন্ট</span></button>
+      <button class="tile${t == 'ad' ? ' on' : ''}" data-art="ad"><i>⏱️</i><b>Lag & Adherence Adjustment</b><span>লেগ ও অ্যাডহেরেন্স এডজাস্টমেন্ট</span></button></div><div id="arbody">${arBody()}</div></div>`;
+  }
+  function arInit() { if (st.art == 'ad') { adFill(); adMine() } else if (st.art == 'ro') roInit() }
 
   // ================= Admin: Requests (roster requirements + adjustment forms) =================
   const RQ = [['ro', 'Roster Requirements'], ['adj', 'Adjustment Forms']];
@@ -211,7 +221,7 @@
   }
 
   // ================= wiring =================
-  function after() { const v = st.v; if (v == 'cb' && !isAgent()) loadCb(); if (v == 'ob') loadOb(); if (v == 'ad' && isAgent()) { adFill(); adMine() } if (v == 'rq' && !isAgent()) loadRq(); if (v == 'me' && isAgent()) roBanner(); if (v == 'ro' && isAgent()) roInit() }
+  function after() { const v = st.v; if (v == 'cb' && !isAgent()) loadCb(); if (v == 'ob') loadOb(); if (v == 'ar' && isAgent()) arInit(); if (v == 'rq' && !isAgent()) loadRq(); if (v == 'me' && isAgent()) roBanner() }
   document.addEventListener('click', async e => {
     const c = e.target.closest('[data-cbt],[data-cbf],[data-obo],[data-act]'); if (!c) return;
     if (c.dataset.cbt) { st.cbt = c.dataset.cbt; document.querySelectorAll('[data-cbt]').forEach(x => x.classList.toggle('on', x == c)); $('#cbsupw').style.display = st.cbt == 'sup' ? '' : 'none'; const d = $('#cbdue'); if (d && !d.value && st.cbt == '24h') d.value = li(Date.now() + 864e5); return }
@@ -227,10 +237,11 @@
     if (a == 'aksave2') { const k = $('#akin2').value; if (!k) return; sessionStorage.setItem('te-ak', k); after(); return }
   });
   document.addEventListener('change', e => { if (e.target.id == 'cbag') { st.cba = e.target.value; drawCb() } if (e.target.id == 'obag') { st.oba = e.target.value; drawObAdmin() } });
-  document.addEventListener('click', async e => { const c = e.target.closest('[data-rqt],[data-act]'); if (!c) return;
+  document.addEventListener('click', async e => { const c = e.target.closest('[data-rqt],[data-act],[data-art]'); if (!c) return;
+    if (c.dataset.art) { st.art = c.dataset.art; document.querySelectorAll('[data-art]').forEach(x => x.classList.toggle('on', x == c)); $('#arbody').innerHTML = arBody(); arInit(); $('#arbody').scrollIntoView({ behavior: 'smooth', block: 'start' }); return }
     if (c.dataset.rqt) { st.rqt = c.dataset.rqt; document.querySelectorAll('[data-rqt]').forEach(x => x.classList.toggle('on', x == c)); return loadRq() }
-    const a = c.dataset.act; if (a == 'rosubmit') return roSubmit(); if (a == 'roopen') return nav('ro'); if (a == 'adsubmit') return adSubmit(); if (a == 'rqref') return loadRq() });
+    const a = c.dataset.act; if (a == 'rosubmit') return roSubmit(); if (a == 'roopen') { st.art = 'ro'; return nav('ar') } if (a == 'adsubmit') return adSubmit(); if (a == 'rqref') return loadRq() });
   document.addEventListener('change', e => { const i = e.target.id; if (i == 'adDate') adFill(); if (i == 'adKind') adNeed(); if (i == 'adFrom' || i == 'adTo') adAuto(); if (i == 'rqd') { st.rqd = e.target.value; drawRo() } if (i == 'rqdt') { st.rqdt = e.target.value; drawAdj() } if (i == 'rqsup') { st.rqsup = e.target.value; drawAdj() } if (i == 'rqag') { st.rqag = e.target.value; drawAdj() } });
   document.addEventListener('input', e => { if (e.target.id == 'adDur') delete e.target.dataset.auto; if (e.target.classList.contains('bad')) e.target.classList.remove('bad') });
-  window.Forms = { cbPage, obPage, adPage, rqPage, roPage, after, Store };
+  window.Forms = { cbPage, obPage, arPage, rqPage, after, Store };
 })();
