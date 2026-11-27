@@ -2,7 +2,7 @@
    and "Agent Observation" (agents write an observation on their own failed items, admin reads).
    Shared storage = Google Apps Script web app (backend/Code.gs). Without it the data stays on this device only. */
 (() => {
-  const CFG = { backendUrl: '' }; fetch('config.json?ts=' + Date.now()).then(r => r.ok ? r.json() : {}).then(j => { Object.assign(CFG, j || {}); try { if (typeof st !== 'undefined' && S && (st.v == 'cb' || st.v == 'ob')) render() } catch (_) { } }).catch(() => { });
+  const CFG = { backendUrl: '' }; fetch('config.json?ts=' + Date.now()).then(r => r.ok ? r.json() : {}).then(j => { Object.assign(CFG, j || {}); try { if (typeof st !== 'undefined' && S && (st.v == 'cb' || st.v == 'obs' || st.v == 'ar' || st.v == 'rq')) render() } catch (_) { } }).catch(() => { });
   const $ = s => document.querySelector(s), LS = { cb: 'te-local-cb', ob: 'te-local-ob', ro: 'te-local-ro', adj: 'te-local-adj' }, be = () => (localStorage.getItem('te-be') || CFG.backendUrl || '').trim(), ak = () => sessionStorage.getItem('te-ak') || '';
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7), rd = k => { try { return JSON.parse(localStorage.getItem(LS[k]) || '[]') } catch (_) { return [] } }, wr = (k, v) => localStorage.setItem(LS[k], JSON.stringify(v));
   async function call(body) {
@@ -221,7 +221,7 @@
   }
 
   // ================= wiring =================
-  function after() { const v = st.v; if (v == 'cb' && !isAgent()) loadCb(); if (v == 'ob') loadOb(); if (v == 'ar' && isAgent()) arInit(); if (v == 'rq' && !isAgent()) loadRq(); if (v == 'me' && isAgent()) roBanner() }
+  function after() { const v = st.v; if (v == 'cb' && !isAgent()) loadCb(); if (v == 'obs') loadOb(); if (v == 'ar' && isAgent()) arInit(); if (v == 'rq' && !isAgent()) loadRq(); if (v == 'me' && isAgent()) roBanner() }
   document.addEventListener('click', async e => {
     const c = e.target.closest('[data-cbt],[data-cbf],[data-obo],[data-act]'); if (!c) return;
     if (c.dataset.cbt) { st.cbt = c.dataset.cbt; document.querySelectorAll('[data-cbt]').forEach(x => x.classList.toggle('on', x == c)); $('#cbsupw').style.display = st.cbt == 'sup' ? '' : 'none'; const d = $('#cbdue'); if (d && !d.value && st.cbt == '24h') d.value = li(Date.now() + 864e5); return }
